@@ -1,10 +1,10 @@
-# UrbanSolar Battery - Personal Test Fork
+# UrbanSolar Battery - Fork personnel de test
 
-![HACS Integration](https://img.shields.io/badge/HACS-Integration-blue?logo=home-assistant)
-![Home Assistant](https://img.shields.io/badge/Compatible-Home%20Assistant-41BDF5?logo=home-assistant)
-![Status](https://img.shields.io/badge/Status-Personal%20test%20fork-orange)
+![Intégration HACS](https://img.shields.io/badge/HACS-Int%C3%A9gration-blue?logo=home-assistant)
+![Plateforme Home Assistant](https://img.shields.io/badge/Plateforme-Home%20Assistant-41BDF5?logo=home-assistant)
+![Statut : fork de test](https://img.shields.io/badge/Statut-Fork%20de%20test-orange)
 
-> **Fork notice:** This is an unofficial personal test fork. It is not affiliated with or supported by the original project. It is provided "as is", without support or warranty.
+> **Avis :** ce fork personnel de test n'est ni affilié au projet d'origine ni pris en charge par celui-ci. Il est fourni « en l'état », sans assistance ni garantie.
 
 ---
 
@@ -14,7 +14,7 @@
 2. [Installer l'intégration](#installer-lintegration)
 3. [Configuration](#configuration)
 4. [Entités & Automatisations](#entites-et-automatisations)
-5. [Dashboard Lovelace](#dashboard-lovelace)
+5. [Tableau de bord Lovelace](#tableau-de-bord-lovelace)
 6. [Dépannage](#depannage)
 7. [À propos de ce fork](#a-propos-de-ce-fork)
 
@@ -23,7 +23,7 @@
 <a id="ajouter-le-depot-hacs"></a>
 ## 1. Ajouter le dépôt HACS
 
-La release de test actuelle est [Urban Solar Battery 1.0.1](https://github.com/BeletteHome/ha-urbansolar-bv/releases/tag/v1.0.1). Le contrôle HACS du dépôt échoue actuellement sur les métadonnées GitHub (licence absente, Issues désactivées et sujets/topics manquants). L'installation manuelle du ZIP reste disponible ci-dessous.
+La version de test publiée actuellement est [Urban Solar Battery 1.0.1](https://github.com/BeletteHome/ha-urbansolar-bv/releases/tag/v1.0.1). Le contrôle HACS du dépôt échoue actuellement sur les métadonnées GitHub : licence absente, fonctionnalité de signalement désactivée et sujets du dépôt manquants. L'installation manuelle de l'archive ZIP reste disponible ci-dessous.
 
 1. Ouvrez **HACS** dans Home Assistant.  
 2. Allez dans l’onglet **Intégrations**.  
@@ -37,15 +37,17 @@ La release de test actuelle est [Urban Solar Battery 1.0.1](https://github.com/B
 <a id="installer-lintegration"></a>
 ## 2. Installer l'intégration
 
-Avant le remplacement d'une ancienne installation, créez une sauvegarde Home Assistant. N'exécutez pas simultanément le dépôt d'origine et ce fork : ils utilisent le même domaine et les mêmes fichiers de configuration. Remplacez l'ancien code de l'intégration en conservant l'entrée d'intégration et les fichiers `urban_*.yaml` existants.
+Avant toute installation ou mise à jour, créez une sauvegarde Home Assistant. N'exécutez pas simultanément le dépôt d'origine et ce fork : ils utilisent le même domaine et les mêmes fichiers de configuration. Lors d'un remplacement manuel, conservez l'entrée d'intégration et les fichiers `urban_*.yaml` existants.
 
-### Installation manuelle de la release 1.0.1
+### Installation manuelle de la version 1.0.1
 
-1. Téléchargez [`urbansolar_bv.zip`](https://github.com/BeletteHome/ha-urbansolar-bv/releases/download/v1.0.1/urbansolar_bv.zip).
-2. Décompressez son contenu dans `/config/custom_components/ha_urbansolar_bv/`. Le fichier `manifest.json` doit se trouver directement dans ce dossier.
-3. Redémarrez Home Assistant, puis ajoutez **UrbanSolar Battery** dans **Paramètres → Appareils et services → Ajouter une intégration** si l'entrée n'existe pas déjà.
+1. Téléchargez l'archive [`urbansolar_bv.zip`](https://github.com/BeletteHome/ha-urbansolar-bv/releases/download/v1.0.1/urbansolar_bv.zip) depuis la page de la publication.
+2. Si une ancienne version est installée, arrêtez Home Assistant et supprimez ou déplacez uniquement son ancien dossier de code dans `custom_components/`. Ne supprimez ni l'entrée d'intégration dans Home Assistant ni les fichiers `urban_*.yaml`.
+3. Créez le dossier `/config/custom_components/ha_urbansolar_bv/`, puis décompressez-y le contenu de l'archive. Vérifiez que `manifest.json` se trouve directement dans ce dossier, et non dans un sous-dossier supplémentaire.
+4. Redémarrez Home Assistant.
+5. Dans **Paramètres → Appareils et services**, vérifiez l'entrée **UrbanSolar Battery**. Si c'est une nouvelle installation, choisissez **Ajouter une intégration** et sélectionnez les capteurs source à l'étape suivante.
 
-Pour une installation HACS, utilisez le dépôt personnalisé de la section 1, sélectionnez **Urban Solar Battery 1.0.1**, puis redémarrez Home Assistant. Comme le dépôt ne passe pas encore tous les contrôles HACS, l'installation manuelle est le chemin de test le plus prévisible.
+Pour une installation HACS, utilisez le dépôt personnalisé de la section 1, sélectionnez **UrbanSolar Battery 1.0.1**, puis redémarrez Home Assistant. Comme ce dépôt échoue actuellement à certains contrôles HACS, l'installation manuelle est le parcours de test recommandé.
 
 Les cartes Lovelace ci-dessous ne sont pas nécessaires au fonctionnement de l'intégration. Installez-les uniquement si vous souhaitez utiliser le tableau de bord fourni.
 
@@ -153,7 +155,7 @@ views:
             max_expected_energy: 2000
             min_expected_energy: 10
             wh_kwh_threshold: 1000
-            title: Energy Flow Card
+                title: Flux d'énergie
           - type: custom:apexcharts-card
             graph_span: 3d
             span:
@@ -221,7 +223,7 @@ views:
             watt_threshold: 1000
             transparency_zero_lines: 0
             sort_individual_devices: false
-            title: Power Flow Card
+            title: Flux de puissance
           - type: custom:apexcharts-card
             graph_span: 3d
             span:
@@ -321,12 +323,12 @@ views:
                     icon: mdi:clock-in
                   - entity: sensor.urban_batterie_virtuelle_entree_horaire
                     secondary_info: none
-                    name: 'Batt in pour dashboard energy '
+                    name: Entrée batterie (énergie)
                     icon: mdi:battery-arrow-down
                   - entity: sensor.urban_batterie_virtuelle_sortie_horaire
-                    name: Batt out pour dashboard energy
+                    name: Sortie batterie (énergie)
                     icon: mdi:battery-arrow-up
-                title: Index horaire et sensor horaire
+                title: Compteurs horaires et bilan
                 grid_options:
                   columns: 12
                   rows: 6
@@ -387,8 +389,8 @@ Les helpers `urban_energie_battery_*_hourly` sont des compteurs cumulés mis à 
 
 ---
 
-<a id="dashboard-lovelace"></a>
-## 5. Dashboard Lovelace
+<a id="tableau-de-bord-lovelace"></a>
+## 5. Tableau de bord Lovelace
 
 Le tableau de bord montre les flux de puissance, le bilan énergétique et le stock de la batterie virtuelle. Il référence les cartes frontend listées dans la section d'installation.
 
@@ -411,14 +413,14 @@ Les entités `sensor.urban_batterie_virtuelle_entree_horaire` et `sensor.urban_b
 
 ### Validation HACS
 
-La validation HACS de ce fork échoue actuellement sur trois métadonnées GitHub : aucun fichier de licence, Issues désactivées et aucun topic reconnu. Le ZIP de la [release 1.0.1](https://github.com/BeletteHome/ha-urbansolar-bv/releases/tag/v1.0.1) reste disponible pour test manuel. N'ajoutez pas de licence avant d'avoir choisi celle qui s'applique à ce fork.
+La validation HACS de ce fork échoue actuellement sur trois métadonnées GitHub : aucun fichier de licence, fonctionnalité de signalement désactivée et aucun sujet reconnu. L'archive ZIP de la [publication 1.0.1](https://github.com/BeletteHome/ha-urbansolar-bv/releases/tag/v1.0.1) reste disponible pour une installation manuelle. N'ajoutez pas de licence avant d'avoir choisi celle qui s'applique à ce fork.
 
 ---
 
 <a id="a-propos-de-ce-fork"></a>
 ## 7. À propos de ce fork
 
-Ce dépôt est un fork personnel de test maintenu par BeletteHome. Il est fourni "as is" et aucun support n'est proposé. Il n'est pas affilié au projet d'origine.
+Ce dépôt est un fork personnel de test maintenu par BeletteHome. Il est fourni « en l'état », sans assistance ni garantie. Il n'est pas affilié au projet d'origine.
 
 ---
 
