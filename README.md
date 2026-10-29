@@ -74,14 +74,18 @@ utility_meter: !include urban_utility_meters.yaml
 automation: !include urban_automations.yaml
 ```
 
-<pre lang="yaml"><code>
-configuration.yaml, cas de la double source d'entité (ici exemple classique des automations, à adapter aux autres entités)
+Home Assistant accepts only one top-level `automation:` key. If you already include
+your own automation file, do not add a second `automation:` entry. To load multiple
+YAML automation files, move the YAML automations into separate files under an
+`automations/` directory and use:
 
 ```yaml
-# Automatisations globales 
-automation: !include automations.yaml 
-# Automatisations spécifiques à UrbanSolar 
-automation urban: !include urban_automations.yaml</code></pre>```
+automation: !include_dir_merge_list automations/
+```
+
+Place the UrbanSolar automations from `urban_automations.yaml` in that directory
+alongside your own YAML automation files. UI-managed automations are stored
+separately by Home Assistant and do not need to be moved.
 ---
 
 →**Redémarrez Home Assistant après avoir enregistré configuration.yaml**
