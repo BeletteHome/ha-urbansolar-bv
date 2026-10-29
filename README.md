@@ -1,34 +1,38 @@
-# 🔋 UrbanSolar Battery – Intégration HACS pour Home Assistant
+# UrbanSolar Battery - Personal Test Fork
 
 ![HACS Integration](https://img.shields.io/badge/HACS-Integration-blue?logo=home-assistant)
 ![Home Assistant](https://img.shields.io/badge/Compatible-Home%20Assistant-41BDF5?logo=home-assistant)
-![Status](https://img.shields.io/badge/Status-Stable-brightgreen)
+![Status](https://img.shields.io/badge/Status-Personal%20test%20fork-orange)
+
+> **Fork notice:** This is an unofficial personal test fork. It is not affiliated with or supported by the original project. It is provided "as is", without support or warranty.
 
 ---
 
 ## 📚 Sommaire
 
-1. [Ajouter le dépôt HACS](#1-ajouter-le-dépôt-hacs)  
-2. [Installer l'intégration](#2-installer-lintégration)  
-3. [Configuration](#3-configuration)  
-4. [Entités & Automatisations](#4-entités--automatisations)  
-5. [Dashboard Lovelace](#5-dashboard-lovelace)  
-6. [Dépannage](#6-dépannage)  
-7. [Auteur & Support](#7-auteur--support)
+1. [Ajouter le dépôt HACS](#ajouter-le-depot-hacs)
+2. [Installer l'intégration](#installer-lintegration)
+3. [Configuration](#configuration)
+4. [Entités & Automatisations](#entites-et-automatisations)
+5. [Dashboard Lovelace](#dashboard-lovelace)
+6. [Dépannage](#depannage)
+7. [À propos de ce fork](#a-propos-de-ce-fork)
 
 ---
 
+<a id="ajouter-le-depot-hacs"></a>
 ## 1. Ajouter le dépôt HACS
 
 1. Ouvrez **HACS** dans Home Assistant.  
 2. Allez dans l’onglet **Intégrations**.  
 3. Cliquez sur **➕ Ajouter un dépôt personnalisé** et entrez l’URL :  
-   `https://github.com/chourmovs/ha-urbansolar-bv`  
+  `https://github.com/BeletteHome/ha-urbansolar-bv`
 4. Sélectionnez **Catégorie : Intégration**.  
 5. Cliquez sur **Enregistrer**
 
 ---
 
+<a id="installer-lintegration"></a>
 ## 2. Installer l'intégration
 
 1. Dans **HACS → Intégrations**, recherchez **UrbanSolar Battery**.  
@@ -51,7 +55,8 @@ L’intégration utilise plusieurs cartes Lovelace que vous devez installer via 
 
 ---
 
-## 3. 🔧 Configuration
+<a id="configuration"></a>
+## 3. Configuration
 
 Lors de l’ajout de l’intégration, une boîte de dialogue vous demandera de sélectionner :
 
@@ -325,7 +330,8 @@ views:
 
 
 
-## 4. 🌐 Entités & Automatisations
+<a id="entites-et-automatisations"></a>
+## 4. Entités & Automatisations
 
 ### Capteurs créés automatiquement
 
@@ -353,7 +359,8 @@ views:
 
 ---
 
-## 5. 🎨 Dashboard Lovelace
+<a id="dashboard-lovelace"></a>
+## 5. Dashboard Lovelace
 
 Un **dashboard complet** est installé automatiquement via `urban_dashboard.yaml` :  
 - Visualisation du flux d’énergie  
@@ -370,7 +377,8 @@ Un **dashboard complet** est installé automatiquement via `urban_dashboard.yaml
 ![Capture d'écran de l'application](https://i.imgur.com/vUdDOOh.png)
 ---
 
-## 6. ❗ Dépannage
+<a id="depannage"></a>
+## 6. Dépannage
 
 - **Capteur manquant (`sensor.urban_energie_restituee_au_reseau`) ?**  
   → Vérifiez votre configuration YAML et les logs de Home Assistant.
@@ -380,13 +388,11 @@ Un **dashboard complet** est installé automatiquement via `urban_dashboard.yaml
 
 ---
 
-## 7. 📝 Auteur & Support
+<a id="a-propos-de-ce-fork"></a>
+## 7. À propos de ce fork
 
-- **Auteur** : [chourmovs](https://github.com/chourmovs)  
-- **Support & bugs** : [Issues GitHub](https://github.com/chourmovs/ha-urbansolar-bv/issues)
+Ce dépôt est un fork personnel de test maintenu par BeletteHome. Il est fourni "as is" et aucun support n'est proposé. Il n'est pas affilié au projet d'origine.
 
 ---
 
-Merci d’utiliser **UrbanSolar Battery** ⚡️ pour optimiser votre autoconsommation solaire ! 🌞
-
-[![Buy Me A Coffee](https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png)](https://www.buymeacoffee.com/chourmovs)
+Merci d’utiliser cette version de test d’**UrbanSolar Battery**.
