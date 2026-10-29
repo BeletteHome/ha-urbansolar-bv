@@ -4,6 +4,11 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release tag to upload the package to
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -14,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       # Package the integration directory for the release asset.
       - name: ZIP urbansolar_bv Dir
@@ -28,5 +33,5 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ${{ github.workspace }}/custom_components/ha_urbansolar_bv/urbansolar_bv.zip
           asset_name: urbansolar_bv.zip
-          tag: ${{ github.ref }}
+          tag: ${{ github.event.release.tag_name || inputs.release_tag }}
           overwrite: true
