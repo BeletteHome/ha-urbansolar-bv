@@ -13,17 +13,17 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v2
 
-      # Pack the open_meteo_solar_forecast dir as a zip and upload to the release
+      # Package the integration directory for the release asset.
       - name: ZIP urbansolar_bv Dir
         run: |
-          cd ${{ github.workspace }}/custom_components/urbansolar_battery
+          cd ${{ github.workspace }}/custom_components/ha_urbansolar_bv
           zip urbansolar_bv.zip -r ./
           ls
       - name: Upload zip to release
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ github.workspace }}/custom_components/urbansolar_battery/urbansolar_bv.zip
+          file: ${{ github.workspace }}/custom_components/ha_urbansolar_bv/urbansolar_bv.zip
           asset_name: urbansolar_bv.zip
           tag: ${{ github.ref }}
           overwrite: true
