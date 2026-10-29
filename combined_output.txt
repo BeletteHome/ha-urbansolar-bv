@@ -6,25 +6,23 @@
   - generate_single_file.py
   - hacs.json
   - custom_components/
-    - custom_components/urbansolar_battery/
+    - custom_components/ha_urbansolar_bv/
       - __init__.py
       - config_flow.py
       - const.py
-      - copy_yaml_files.py
       - manifest.json
       - setup_virtual_battery.py
-      - custom_components/urbansolar_battery/config/
+      - custom_components/ha_urbansolar_bv/config/
         - automations.yaml
         - dashboard.yaml
         - input_numbers.yaml
+        - integrations.yaml
         - sensors.yaml
         - utility_meters.yaml
-      - custom_components/urbansolar_battery/translations/
+      - custom_components/ha_urbansolar_bv/translations/
         - fr.json
-  - .github/
   - .git/
-  - documentation/
-    - instructions.md
+  - .github/
 
 ---
 
@@ -134,33 +132,15 @@ if __name__ == "__main__":
 ---
 
 {
-  "domain": "urbansolar_battery",
   "name": "Urban Solar Battery",
-  "version": "1.0.0",
-  "documentation": "https://github.com/chourmovs/ha-urbansolar-bv/wiki",
-  "dependencies": [
-    "custom-cards/number-box",
-    "RomRider/apexcharts-card"
-  ],
-  "resources": [
-    {
-      "type": "module",
-      "url": "/local/community/number-box/number-box.js"
-    },
-    {
-      "type": "module",
-      "url": "/local/community/apexcharts-card/apexcharts-card.js"
-    }
-  ],
-  "codeowners": ["@chourmovs"],
-  "config_flow": true,
-  "requirements": [],
-  "iot_class": "local_polling"
+  "render_readme": true,
+  "homeassistant": "2022.11",
+  "zip_release": true,
+  "filename": "urbansolar_bv.zip"
 }
 
-
 ---
-# custom_components/urbansolar_battery/__init__.py
+# custom_components/ha_urbansolar_bv/__init__.py
 ---
 
 """UrbanSolar Virtual Battery integration."""
@@ -169,12 +149,14 @@ import logging
 
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
-from .copy_yaml_files import copy_yaml_files
+from homeassistant.helpers import config_validation as cv
 
 from .const import DOMAIN
 from .setup_virtual_battery import setup_virtual_battery
 
 _LOGGER = logging.getLogger(__name__)
+
+CONFIG_SCHEMA = cv.empty_config_schema(DOMAIN)
 
 async def async_setup(hass: HomeAssistant, config: dict):
     """Set up UrbanSolar Virtual Battery from yaml configuration."""
@@ -184,8 +166,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     """Set up UrbanSolar Virtual Battery from a config entry."""
     _LOGGER.info("Setting up UrbanSolar Virtual Battery integration")
     
-    copy_yaml_files()
     hass.data.setdefault(DOMAIN, {})
+    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
     # Appelle la fonction pour créer les entités virtuelles
     await setup_virtual_battery(hass, entry)
@@ -202,110 +184,184 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
     return True
 
 
+async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload the integration after its options change."""
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
 ---
-# custom_components/urbansolar_battery/config_flow.py
+# custom_components/ha_urbansolar_bv/config_flow.py
 ---
 
-from homeassistant import config_entries
 import voluptuous as vol
+from homeassistant import config_entries
 from homeassistant.core import callback
+from homeassistant.helpers.selector import selector
+from homeassistant.const import UnitOfEnergy, UnitOfPower
+
+from .const import (
+    DOMAIN,
+    CONF_SOLAR_POWER_SENSOR,
+    CONF_TOTAL_POWER_CONSO_SENSOR,
+)
 
 
-from .const import DOMAIN, CONF_PRODUCTION_SENSOR, CONF_CONSOMMATION_SENSOR
+def _validate_power_sensors(hass, user_input):
+    errors = {}
+    for input_key in (CONF_SOLAR_POWER_SENSOR, CONF_TOTAL_POWER_CONSO_SENSOR):
+        state = hass.states.get(user_input[input_key])
+        if (
+            state is None
+            or state.attributes.get("unit_of_measurement") != UnitOfPower.KILO_WATT
+        ):
+            errors[input_key] = "invalid_unit"
+    return errors
+
 
 class VirtualBatteryConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Config flow for UrbanSolar Virtual Battery."""
+    VERSION = 1
 
     async def async_step_user(self, user_input=None):
+        """Handle user input."""
         errors = {}
+
         if user_input is not None:
-            return self.async_create_entry(title="UrbanSolar Battery", data=user_input)
+            errors = _validate_power_sensors(self.hass, user_input)
 
-        schema = vol.Schema({
-            vol.Required(CONF_PRODUCTION_SENSOR): str,
-            vol.Required(CONF_CONSOMMATION_SENSOR): str,
-        })
+            self._log("Validation errors:", errors)
 
-        return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
+            if not errors:
+                # Créer l'entrée sans await (car ce n'est pas une coroutine)
+                entry = self.async_create_entry(title="UrbanSolar Battery", data=user_input)
+
+                # Réinitialiser input_number.urban_energie_battery_out_hourly et in à 0
+                for entity_id in [
+                        "input_number.urban_energie_battery_out_hourly",
+                        "input_number.urban_energie_battery_in_hourly",
+                ]:
+                        await self.hass.services.async_call(
+                            "input_number",
+                            "set_value",
+                            {
+                                "entity_id": entity_id,
+                                "value": 0,
+                            },
+                            blocking=True,
+                             )
+
+                return entry
+
+
+        return self.async_show_form(
+            step_id="user",
+            data_schema=vol.Schema({
+                vol.Required(CONF_SOLAR_POWER_SENSOR): selector({
+                    "entity": {
+                        "domain": "sensor",
+                        "device_class": "power"
+                    }
+                }),
+                vol.Required(CONF_TOTAL_POWER_CONSO_SENSOR): selector({
+                    "entity": {
+                        "domain": "sensor",
+                        "device_class": "power"
+                    }
+                }),
+            }),
+            errors=errors
+        )
 
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):
         return VirtualBatteryOptionsFlowHandler(config_entry)
 
+    @staticmethod
+    def _log(message, *args):
+        """Simple logger."""
+        print(f"[VirtualBatteryConfigFlow] {message} {args}")
+
+
 class VirtualBatteryOptionsFlowHandler(config_entries.OptionsFlow):
     """Options flow for UrbanSolar Virtual Battery."""
 
     def __init__(self, config_entry):
-        self._config_entry = config_entry
+        self.config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
+        """Handle the options form."""
+        errors = {}
+        current_config = {**self.config_entry.data, **self.config_entry.options}
+
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            errors = _validate_power_sensors(self.hass, user_input)
+            if not errors:
+                self._log("Options flow user input:", user_input)
+                return self.async_create_entry(title="", data=user_input)
 
-        schema = vol.Schema({
-            vol.Required(CONF_PRODUCTION_SENSOR, default=self.config_entry.data.get(CONF_PRODUCTION_SENSOR, "")): str,
-            vol.Required(CONF_CONSOMMATION_SENSOR, default=self.config_entry.data.get(CONF_CONSOMMATION_SENSOR, "")): str,
-        })
+        self._log("Current config:", current_config)
 
-        return self.async_show_form(step_id="init", data_schema=schema)
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema({
+                vol.Required(
+                    CONF_SOLAR_POWER_SENSOR,
+                    default=current_config.get(CONF_SOLAR_POWER_SENSOR, "")
+                ): selector({
+                    "entity": {
+                        "domain": "sensor",
+                        "device_class": "power"
+                    }
+                }),
+                vol.Required(
+                    CONF_TOTAL_POWER_CONSO_SENSOR,
+                    default=current_config.get(CONF_TOTAL_POWER_CONSO_SENSOR, "")
+                ): selector({
+                    "entity": {
+                        "domain": "sensor",
+                        "device_class": "power"
+                    }
+                }),
+            }),
+            errors=errors
+        )
 
+    def _log(self, message, *args):
+        print(f"[VirtualBatteryOptionsFlowHandler] {message} {args}")
 
 ---
-# custom_components/urbansolar_battery/const.py
+# custom_components/ha_urbansolar_bv/const.py
 ---
 
-DOMAIN = "urbansolar_battery"
+DOMAIN = "ha_urbansolar_bv"
 CONF_PRODUCTION_SENSOR = "source_energie_produite"
 CONF_CONSOMMATION_SENSOR = "source_energie_consommee"
+CONF_SOLAR_POWER_SENSOR = "solar_power_sensor"
+CONF_TOTAL_POWER_CONSO_SENSOR = "total_power_conso_sensor"
 
 ---
-# custom_components/urbansolar_battery/copy_yaml_files.py
----
-
-import os
-import shutil
-
-BASE_CONFIG_DIR = "/config"
-COMPONENT_CONFIG_DIR = os.path.join(os.path.dirname(__file__), "config")
-
-FILES_TO_COPY = ["input_numbers.yaml", "sensors.yaml", "utility_meters.yaml"]
-
-def copy_yaml_files():
-    for filename in FILES_TO_COPY:
-        src_path = os.path.join(COMPONENT_CONFIG_DIR, filename)
-        dest_path = os.path.join(BASE_CONFIG_DIR, filename)
-
-        if not os.path.exists(dest_path):
-            shutil.copyfile(src_path, dest_path)
-        else:
-            # Append the content if not already present (very naïve)
-            with open(src_path, "r") as src, open(dest_path, "a") as dest:
-                dest.write("\n\n# --- Added by urbansolar_battery ---\n")
-                dest.write(src.read())
-
-
----
-# custom_components/urbansolar_battery/manifest.json
+# custom_components/ha_urbansolar_bv/manifest.json
 ---
 
 {
-  "domain": "urbansolar_battery",
+  "domain": "ha_urbansolar_bv",
   "name": "UrbanSolar Battery",
-  "version": "1.0.0",
-  "documentation": "https://github.com/chourmovs/ha-urbansolar-bv/wiki",
-  "integration_type": "service",
-  "requirements": [],
-  "dependencies": [],
   "after_dependencies": [],
   "codeowners": ["@chourmovs"],
   "config_flow": true,
-  "iot_class": "local_push"
+  "dependencies": [],
+  "documentation": "https://github.com/chourmovs/ha-urbansolar-bv/wiki",
+  "integration_type": "service",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/chourmovs/ha-urbansolar-bv/issues",
+  "requirements": [],
+  "version": "1.0"
 }
 
 
 ---
-# custom_components/urbansolar_battery/setup_virtual_battery.py
+# custom_components/ha_urbansolar_bv/setup_virtual_battery.py
 ---
 
 import logging
@@ -313,493 +369,675 @@ import os
 import shutil
 import yaml
 
+from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import ConfigEntry
+
+
+from .const import (
+    CONF_SOLAR_POWER_SENSOR,
+    CONF_TOTAL_POWER_CONSO_SENSOR,
+    DOMAIN
+)
+
 _LOGGER = logging.getLogger(__name__)
 
-CONFIG_DIR = "custom_components/urbansolar_battery/config"
+CONFIG_DIR = os.path.join(os.path.dirname(__file__), "config")
 TARGET_DIR = "/config"
 
 FILES_TO_COPY = {
     "input_numbers.yaml": "urban_input_numbers.yaml",
-    "sensors.yaml": "urban_sensors.yaml",
+    "integrations.yaml": "urban_integrations.yaml",
     "utility_meters.yaml": "urban_utility_meters.yaml",
     "automations.yaml": "urban_automations.yaml",
     "dashboard.yaml": "urban_dashboard.yaml",
-
 }
 
-async def setup_virtual_battery(hass, entry):
-    """Setup the UrbanSolar virtual battery by copying config files and injecting sensors."""
-    _LOGGER.info("Setting up UrbanSolar Virtual Battery - YAML copy mode")
-
-    CONFIG_DIR = "custom_components/urbansolar_battery/config"
-    TARGET_DIR = "/config"
-
-    FILES_TO_COPY = {
-        "input_numbers.yaml": "urban_input_numbers.yaml",
-        "utility_meters.yaml": "urban_utility_meters.yaml",
-        "sensors.yaml": "urban_sensors.yaml",
-        "automations.yaml": "urban_automations.yaml",
-        "dashboard.yaml": "urban_dashboard.yaml",
-    }
-
-    # Copier les fichiers standards
-    for src_name, dest_name in FILES_TO_COPY.items():
-        src_path = os.path.join(CONFIG_DIR, src_name)
-        dest_path = os.path.join(TARGET_DIR, dest_name)
-
-        if not os.path.exists(src_path):
-            _LOGGER.warning(f"Fichier source manquant : {src_path}")
-            continue
-
-        try:
-            if os.path.exists(dest_path):
-                os.remove(dest_path)
-            shutil.copy(src_path, dest_path)
-            _LOGGER.info(f"Copié {src_path} → {dest_path}")
-        except Exception as e:
-            _LOGGER.error(f"Erreur lors de la copie de {src_path} vers {dest_path} : {e}")
-
-    # Ajouter le capteur dynamique à urban_sensors.yaml
-    production_sensor = entry.data.get("production_sensor")
-    consommation_sensor = entry.data.get("consommation_sensor")
-    sensors_yaml_path = os.path.join(TARGET_DIR, "urban_sensors.yaml")
-
-    add_dynamic_template_sensor(production_sensor, consommation_sensor, sensors_yaml_path)
-
-    _LOGGER.info("UrbanSolar Virtual Battery setup completed.")
+STATIC_SENSORS_SRC = os.path.join(CONFIG_DIR, "sensors.yaml")
+DYNAMIC_SENSORS_DST = os.path.join(TARGET_DIR, "urban_sensors.yaml")
+DYNAMIC_INTEGRATION_DST = os.path.join(TARGET_DIR, "urban_integrations.yaml")
 
 
+async def setup_virtual_battery(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Installe les capteurs et fichiers nécessaires à la batterie virtuelle."""
+    _LOGGER.info("Setting up UrbanSolar Virtual Battery")
 
-
-
-def add_dynamic_template_sensor(production_sensor, consommation_sensor, yaml_path):
-    """Ajoute un sensor template dynamique à urban_sensors.yaml."""
-    template_sensor = {
-        "platform": "template",
-        "sensors": {
-            "energie_restituee_au_reseau": {
-                "friendly_name": "Énergie Restituée au Réseau",
-                "unit_of_measurement": "kWh",
-                "value_template": f"{{{{ states('{production_sensor}') | float - states('{consommation_sensor}') | float }}}}"
-            }
-        }
-    }
-
-    try:
-        if os.path.exists(yaml_path):
-            with open(yaml_path, "r") as f:
-                existing_data = yaml.safe_load(f) or []
+    # 1) Copier les fichiers statiques
+    for src_name, dst_name in FILES_TO_COPY.items():
+        src = os.path.join(CONFIG_DIR, src_name)
+        dst = os.path.join(TARGET_DIR, dst_name)
+        if os.path.exists(src) and not os.path.exists(dst):
+            await hass.async_add_executor_job(shutil.copy, src, dst)
+            _LOGGER.debug("Copied %s → %s", src, dst)
+        elif os.path.exists(dst):
+            _LOGGER.debug("Preserving existing configuration file %s", dst)
         else:
-            existing_data = []
+            _LOGGER.warning("Missing source file: %s", src)
 
-        # Supprimer l'ancien sensor si déjà présent
-        existing_data = [
-            block for block in existing_data
-            if not (isinstance(block, dict) and block.get("platform") == "template" and "energie_restituee_au_reseau" in block.get("sensors", {}))
+    # 2) Initialiser ou copier sensors.yaml
+    if os.path.exists(STATIC_SENSORS_SRC) and not os.path.exists(DYNAMIC_SENSORS_DST):
+        await hass.async_add_executor_job(shutil.copy, STATIC_SENSORS_SRC, DYNAMIC_SENSORS_DST)
+    elif not os.path.exists(DYNAMIC_SENSORS_DST):
+        def write_empty():
+            with open(DYNAMIC_SENSORS_DST, "w", encoding="utf-8") as f:
+                yaml.dump([], f)
+        await hass.async_add_executor_job(write_empty)
+        _LOGGER.warning("No static sensors.yaml found; created empty urban_sensors.yaml")
+    else:
+        _LOGGER.debug("Preserving existing configuration file %s", DYNAMIC_SENSORS_DST)
+
+    # 3) Récupérer les capteurs configurés
+    prod_instant = entry.options.get(
+        CONF_SOLAR_POWER_SENSOR, entry.data.get(CONF_SOLAR_POWER_SENSOR)
+    )
+    cons_instant = entry.options.get(
+        CONF_TOTAL_POWER_CONSO_SENSOR, entry.data.get(CONF_TOTAL_POWER_CONSO_SENSOR)
+    )
+
+    if not prod_instant or not cons_instant:
+        _LOGGER.error("Un ou plusieurs capteurs requis sont manquants dans la configuration.")
+        return
+
+    # 4) Injecter le capteur template pour l’énergie importée
+    def inject_import_power_template():
+        with open(DYNAMIC_SENSORS_DST, "r", encoding="utf-8") as f:
+            existing = yaml.safe_load(f) or []
+
+
+        new_list = {
+                 "sensor": [
+                        {
+                            "name": "Urban Énergie Restituée au Réseau",
+                            "unique_id": "urban_energie_restituee_au_reseau",
+                            "unit_of_measurement": "kWh",
+                            "device_class": "energy",
+                            "state_class": "total",
+                            "state": "{{ states('sensor.urban_energie_solaire_produite') | float(0) - states('sensor.urban_energie_consommee_totale') | float(0) }}"
+                        },
+                        
+                        {
+                            "name": "Urban Puissance Import Enedis",
+                            "unique_id": "urban_puissance_import_enedis",
+                            "unit_of_measurement": "W",
+                            "device_class": "power",
+                            "state_class": "measurement",
+                            "state": (
+                                "{% set puissance_conso = states('" + str(cons_instant) + "') | float(0) * 1000 %}\n"
+                                "{% set puissance_prod = states('" + str(prod_instant) + "') | float(0) * 1000 %}\n"
+                                "{% set batterie_stock = states('input_number.urban_batterie_virtuelle_stock') | float(0) %}\n"
+                                "{% if batterie_stock > 0 %} 0\n"
+                                "{% elif (puissance_conso - puissance_prod) > 0 %}\n"
+                                "{{ puissance_conso - puissance_prod }}\n"
+                                "{% else %} 0 {% endif %}"
+                            )
+                        },
+                        
+                        {
+                            "name": "Urban Puissance Batterie Virtuelle IN",
+                            "unique_id":"urban_puissance_batterie_virtuelle_in",
+                            "unit_of_measurement": "W",
+                            "device_class": "power",
+                            "state_class": "measurement",
+                            "state": (
+                                f"{{% set prod = states('{prod_instant}') | float(0) * 1000 %}}\n"
+                                f"{{% set conso = states('{cons_instant}') | float(0) * 1000 %}}\n"
+                                f"{{% set import_enedis = states('sensor.urban_puissance_import_enedis') | float(0) %}}\n"
+                                f"{{% if import_enedis == 0 and prod > conso %}}\n"
+                                f"  {{{{ prod - conso }}}}\n"
+                                f"{{% else %}} 0 {{% endif %}}"
+                            )
+                        },
+                        
+                         {
+                            "name": "Urban Puissance Batterie Virtuelle OUT",
+                            "unique_id": "urban_puissance_batterie_virtuelle_out",
+                            "unit_of_measurement": "W",
+                            "device_class": "power",
+                            "state_class": "measurement",
+                            "state": (
+                                f"{{% set prod = states('{prod_instant}') | float(0) * 1000 %}}\n"
+                                f"{{% set conso = states('{cons_instant}') | float(0) * 1000 %}}\n"
+                                f"{{% set import_enedis = states('sensor.urban_puissance_import_enedis') | float(0) %}}\n"
+                                f"{{% if import_enedis == 0 and conso > prod %}}\n"
+                                f"  {{{{ conso - prod }}}}\n"
+                                f"{{% else %}} 0 {{% endif %}}"
+                            )
+                        },
+                        
+                        {
+                            "name": "Urban Batterie Virtuelle Sortie Horaire",
+                            "unique_id": "urban_batterie_virtuelle_sortie_horaire",
+                            "unit_of_measurement": "kWh",
+                            "device_class": "energy",
+                            "state_class": "total_increasing",
+                            "state": "{{ -1 * (states('input_number.urban_energie_battery_out_hourly') | float(0)) }}"
+                        },
+                        
+                        {
+                            "name": "Urban Batterie Virtuelle Entrée Horaire",
+                            "unique_id": "urban_batterie_virtuelle_entree_horaire",
+                            "unit_of_measurement": "kWh",
+                            "device_class": "energy",
+                            "state_class": "total_increasing",
+                            "state": "{{ states('input_number.urban_energie_battery_in_hourly') | float(0) }}"
+                        },
+
+                        {
+                            "name": "Urban Batterie Virtuelle Stock Statistiques",
+                            "unique_id": "urban_batterie_virtuelle_stock_statistiques",
+                            "unit_of_measurement": "kWh",
+                            "device_class": "energy_storage",
+                            "state_class": "measurement",
+                            "state": "{{ states('input_number.urban_batterie_virtuelle_stock') | float(0) }}"
+                        },
+                        
+                        {
+                            "name": "Urban Puissance Solaire Instant",
+                            "unique_id": "urban_puissance_solaire_instant",
+                            "unit_of_measurement": "W",
+                            "device_class": "power",
+                            "state_class": "measurement",
+                            "state": f"{{{{ states('{prod_instant}') | float(0) * 1000}}}}"
+                        },
+                        
+                        {
+                            "name": "Urban Conso Totale Instant",
+                            "unique_id": "urban_conso_totale_instant",
+                            "unit_of_measurement": "W",
+                            "device_class": "power",
+                            "state_class": "measurement",
+                            "state": f"{{{{ states('{cons_instant}') | float(0) * 1000}}}}"
+                        },
+
+                        {
+                            "name": "Urban Energie Importee Enedis",
+                            "unique_id": "urban_energie_importee_enedis",
+                            "unit_of_measurement": "kWh",
+                            "device_class": "energy",
+                            "state_class": "total_increasing",
+                            "state": "{{ states('sensor.urban_energie_importee_enedis_raw') | float(0) }}"
+                        },
+                      ]
+                    }
+
+        managed_sensor_ids = {
+            sensor["unique_id"] for sensor in new_list["sensor"]
+        }
+        if isinstance(existing, dict):
+            existing_sensors = existing.get("sensor", [])
+            if not isinstance(existing_sensors, list):
+                raise ValueError("The sensor key in urban_sensors.yaml must be a list")
+            existing["sensor"] = [
+                sensor for sensor in existing_sensors
+                if not isinstance(sensor, dict)
+                or sensor.get("unique_id") not in managed_sensor_ids
+            ] + new_list["sensor"]
+            merged_sensors = existing
+        elif isinstance(existing, list):
+            merged_sensors = []
+            for block in existing:
+                if not isinstance(block, dict) or not isinstance(block.get("sensor"), list):
+                    merged_sensors.append(block)
+                    continue
+                remaining_sensors = [
+                    sensor for sensor in block["sensor"]
+                    if not isinstance(sensor, dict)
+                    or sensor.get("unique_id") not in managed_sensor_ids
+                ]
+                if remaining_sensors:
+                    merged_sensors.append({**block, "sensor": remaining_sensors})
+            merged_sensors.append(new_list)
+        else:
+            raise ValueError("urban_sensors.yaml must contain a mapping or list")
+
+        with open(DYNAMIC_SENSORS_DST, "w", encoding="utf-8") as f:
+            yaml.dump(merged_sensors, f, allow_unicode=True, sort_keys=False)
+
+        _LOGGER.info("Injected 'urban_puissance_import_enedis' sensor")
+
+    await hass.async_add_executor_job(inject_import_power_template)
+
+
+ # 4) Injecter le capteur integration
+    def inject_import_integration_sensors():
+        integrations = [
+            {
+                "platform": "integration",
+                "name": "urban_energie_solaire_produite",
+                "unique_id": "urban_energie_solaire_produite",
+                "source": prod_instant,
+                "round": 3,
+                "method": "left"
+            },
+            {
+                "platform": "integration",
+                "name": "urban_energie_consommee_totale",
+                "unique_id": "urban_energie_consommee_totale",
+                "source": cons_instant,
+                "round": 3,
+                "method": "left"
+            },
+            {
+                "platform": "integration",
+                "name": "urban_energie_importee_enedis_raw",
+                "unique_id": "urban_energie_importee_enedis_raw",
+                "source": "sensor.urban_puissance_import_enedis",
+                "round": 3,
+                "method": "left",
+                "unit_prefix": "k"
+            },
+
+
+
         ]
 
-        existing_data.append(template_sensor)
+        if os.path.exists(DYNAMIC_INTEGRATION_DST):
+            with open(DYNAMIC_INTEGRATION_DST, "r", encoding="utf-8") as f:
+                existing_integrations = yaml.safe_load(f) or []
+        else:
+            existing_integrations = []
 
-        with open(yaml_path, "w") as f:
-            yaml.dump(existing_data, f, allow_unicode=True)
+        if not isinstance(existing_integrations, list):
+            raise ValueError("urban_integrations.yaml must contain a list")
 
-        _LOGGER.info(f"Sensor dynamique ajouté dans {yaml_path}")
-    except Exception as e:
-        _LOGGER.error(f"Erreur lors de la mise à jour de {yaml_path} : {e}")
+        managed_names = {integration["name"] for integration in integrations}
+        existing_integrations = [
+            integration for integration in existing_integrations
+            if not isinstance(integration, dict)
+            or integration.get("name") not in managed_names
+        ]
 
+        with open(DYNAMIC_INTEGRATION_DST, "w", encoding="utf-8") as f:
+            yaml.dump(
+                existing_integrations + integrations,
+                f,
+                allow_unicode=True,
+                sort_keys=False,
+            )
+
+        _LOGGER.info("Injected integration sensors.")
+
+    await hass.async_add_executor_job(inject_import_integration_sensors)
 
 ---
-# custom_components/urbansolar_battery/config/automations.yaml
+# custom_components/ha_urbansolar_bv/config/automations.yaml
 ---
 
-- id: '174508910456'
-  alias: Mettre à jour les valeurs de veille et avant-veille
-  triggers:
-  - at: 00:01:00
-    trigger: time
-  actions:
-  - variables:
-      veille: '{{ states(''input_number.energie_restituee_veille'') | float(0) }}'
-      aujourd_hui: '{{ states(''sensor.energie_restituee_au_reseau'') | float(0) }}'
-  - target:
-      entity_id: input_number.energie_restituee_avant_veille
-    data:
-      value: '{{ veille }}'
-    action: input_number.set_value
-  - target:
-      entity_id: input_number.energie_restituee_veille
-    data:
-      value: '{{ aujourd_hui }}'
-    action: input_number.set_value
-  mode: single
-- id: '174508910457'
-  alias: Mettre à jour Batterie Virtuelle Stock
-  triggers:
-  - at: 00:01:00
-    trigger: time
-  actions:
-  - choose:
-    - conditions:
-      - condition: numeric_state
-        entity_id: input_number.batterie_virtuelle_pointage
-        above: 0
-      sequence:
-      - target:
-          entity_id: input_number.batterie_virtuelle_stock
-        data:
-          value: '{{ states(''input_number.batterie_virtuelle_pointage'') | float(0)
-            }}'
-        action: input_number.set_value
-      - target:
-          entity_id: input_number.batterie_virtuelle_pointage
-        data:
-          value: 0
-        action: input_number.set_value
 - id: '174508910473'
-  alias: Gestion horaire batterie virtuelle
-  triggers:
-  - hours: '*'
+  alias: Urban - Gestion horaire batterie virtuelle
+  trigger:
+  - platform: time_pattern
+    hours: '*'
     minutes: '59'
     seconds: '45'
-    trigger: time_pattern
-  conditions: []
-  actions:
+  condition:
+  - condition: numeric_state
+    entity_id: sensor.urban_energie_restituee_au_reseau_hourly
+    below: 30
+  - condition: numeric_state
+    entity_id: sensor.urban_energie_restituee_au_reseau_hourly
+    above: -30
+  action:
   - variables:
-      energie_restituee: '{{ states(''sensor.energie_restituee_au_reseau_hourly'')
-        | float(0) }}'
-      batterie_stock: '{{ states(''input_number.batterie_virtuelle_stock'') | float(0)
-        }}'
-      energie_battery_in_hourly: '{{ states(''input_number.energie_battery_in_hourly'')
-        | float(0) }}'
-      energie_battery_out_hourly: '{{ states(''input_number.energie_battery_out_hourly'')
-        | float(0) }}'
+      energie_restituee: "{{ states('sensor.urban_energie_restituee_au_reseau_hourly') | float(0) }}"
+      batterie_stock: "{{ states('input_number.urban_batterie_virtuelle_stock') | float(0) }}"
+      energie_battery_in_hourly: "{{ states('input_number.urban_energie_battery_in_hourly') | float(0) }}"
+      energie_battery_out_hourly: "{{ states('input_number.urban_energie_battery_out_hourly') | float(0) }}"
+      batterie_pointage: "{{ states('input_number.urban_batterie_virtuelle_pointage') | float(0) }}"
   - choose:
     - conditions:
       - condition: numeric_state
-        entity_id: sensor.energie_restituee_au_reseau_hourly
+        entity_id: sensor.urban_energie_restituee_au_reseau_hourly
         above: 0
       sequence:
-      - target:
-          entity_id: input_number.energie_battery_in_hourly
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.urban_energie_battery_in_hourly
         data:
-          value: '{{ (energie_battery_in_hourly + energie_restituee) | round(3) }}'
-        action: input_number.set_value
+          value: "{{ (energie_battery_in_hourly + energie_restituee) | round(3) }}"
     - conditions:
       - condition: numeric_state
-        entity_id: sensor.energie_restituee_au_reseau_hourly
+        entity_id: sensor.urban_energie_restituee_au_reseau_hourly
         below: 0
       sequence:
-      - target:
-          entity_id: input_number.energie_battery_out_hourly
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.urban_energie_battery_out_hourly
         data:
-          value: "{%- if batterie_stock > 0 -%}\n  {{ (energie_battery_out_hourly
-            + energie_restituee) | round(3) }}\n{%- else -%}\n  0\n{%- endif -%}\n"
-        action: input_number.set_value
-  - target:
-      entity_id: input_number.batterie_virtuelle_stock
+          value: >-
+            {% if batterie_stock > 0 %}
+              {{ (energie_battery_out_hourly + energie_restituee) | round(3) }}
+            {% else %}
+              0
+            {% endif %}
+  - service: input_number.set_value
+    target:
+      entity_id: input_number.urban_batterie_virtuelle_stock
     data:
-      value: "{{ [\n  0,\n  (\n    batterie_stock\n    + (energie_restituee if energie_restituee
-        > 0 else 0)\n    - (\n        energie_restituee | abs\n        if batterie_stock
-        > 0 and energie_restituee < 0\n        else 0\n      )\n  )\n] | max | round(3)
-        }}\n"
-    action: input_number.set_value
+      value: >-
+        {% if batterie_pointage > 0 %}
+          {{ batterie_pointage }}
+        {% else %}
+          {{
+            [0,
+              (
+                batterie_stock +
+                (energie_restituee if energie_restituee > 0 else 0) -
+                (energie_restituee | abs if batterie_stock > 0 and energie_restituee < 0 else 0)
+              )
+            ] | max | round(3)
+          }}
+        {% endif %}
+  - service: input_number.set_value
+    target:
+      entity_id: input_number.urban_batterie_virtuelle_pointage
+    data:
+      value: 0
+
 
 ---
-# custom_components/urbansolar_battery/config/dashboard.yaml
+# custom_components/ha_urbansolar_bv/config/dashboard.yaml
 ---
 
 views:
-  - title: Urban
-    sections:
-      - type: grid
-        panel: true
+- title: Urban
+  sections:
+  - type: grid
+    cards:
+    - type: custom:energy-flow-card-plus
+      entities:
+        battery:
+          entity:
+            production: sensor.urban_batterie_virtuelle_entree_horaire
+            consumption: sensor.urban_batterie_virtuelle_sortie_horaire
+          state_of_charge: input_number.urban_batterie_virtuelle_stock
+          state_of_charge_unit: kwh
+          use_metadata: false
+        grid:
+          entity:
+            consumption: sensor.urban_energie_importee_enedis
+          use_metadata: false
+        home:
+          entity: sensor.urban_energie_consommee_totale
+          subtract_individual: false
+          use_metadata: false
+          override_state: true
+        solar:
+          entity: sensor.urban_energie_solaire_produite
+      clickable_entities: true
+      display_zero_lines: true
+      use_new_flow_rate_model: true
+      energy_date_selection: false
+      wh_decimals: 1
+      kwh_decimals: 0
+      min_flow_rate: 1
+      max_flow_rate: 6
+      max_expected_energy: 2000
+      min_expected_energy: 10
+      wh_kwh_threshold: 1000
+      title: Energy Flow Card
+    - type: custom:apexcharts-card
+      graph_span: 3d
+      span:
+        end: minute
+      header:
+        show: true
+        title: Batterie Virtuelle
+        show_states: true
+        colorize_states: true
+      series:
+      - entity: input_number.urban_batterie_virtuelle_stock
+        yaxis_id: first
+        name: Stock batterie
+        type: line
+        group_by:
+          duration: 0.5h
+          func: last
+        stroke_width: 3
+      - entity: input_number.urban_batterie_virtuelle_pointage
+        yaxis_id: first
+        name: Pointage manuel
+        type: line
+        stroke_width: 3
+        color: "#995000"
+        show:
+          in_chart: false
+      yaxis:
+      - id: first
+        decimals: 1
+        apex_config:
+          tickAmount: 4
+
+    - type: custom:power-flow-card-plus
+      entities:
+        battery:
+          entity:
+            consumption: sensor.urban_puissance_batterie_virtuelle_out
+            production: sensor.urban_puissance_batterie_virtuelle_in
+          state_of_charge: input_number.urban_batterie_virtuelle_stock
+          display_state: one_way_no_zero
+          state_of_charge_unit: kwh
+          show_state_of_charge: true
+          use_metadata: true
+          color_circle: true
+        grid:
+          entity: sensor.urban_puissance_import_enedis
+          display_state: one_way
+          secondary_info: {}
+        solar:
+          entity: sensor.urban_puissance_solaire_instant
+          display_zero_state: true
+          secondary_info: {}
+        home:
+          secondary_info: {}
+          entity: sensor.urban_conso_totale_instant
+          override_state: true
+      clickable_entities: true
+      display_zero_lines: true
+      use_new_flow_rate_model: true
+      w_decimals: 0
+      kw_decimals: 1
+      min_flow_rate: 0.75
+      max_flow_rate: 6
+      max_expected_power: 2000
+      min_expected_power: 0.01
+      watt_threshold: 1000
+      transparency_zero_lines: 0
+      sort_individual_devices: false
+      title: Power Flow Card
+
+    - type: custom:apexcharts-card
+      graph_span: 3d
+      span:
+        end: minute
+      header:
+        show: true
+        title: Bilan energie réseau
+        show_states: true
+        colorize_states: true
+      apex_config:
+        chart:
+          type: line
+      series:
+      - entity: sensor.urban_energie_restituee_au_reseau
+        yaxis_id: first
+        type: line
+        color: green
+        group_by:
+          duration: 0.5d
+          func: diff
+        name: Variation quotidienne
+      yaxis:
+      - id: first
+        decimals: 0
+        apex_config:
+          tickAmount: 4
+    - type: custom:apexcharts-card
+      graph_span: 3day
+      span:
+        end: minute
+      header:
+        show: true
+        title: Batterie Virtuelle - Flux Horaire
+        show_states: true
+        colorize_states: true
+      apex_config:
+        chart:
+          type: area
+        stroke:
+          curve: smooth
+      series:
+      - entity: input_number.urban_energie_battery_in_hourly
+        yaxis_id: first
+        name: Entrée Batterie (IN)
+        type: line
+        color: "#00C853"
+        stroke_width: 3
+        group_by:
+          duration: 1h
+          func: avg
+      - entity: input_number.urban_energie_battery_out_hourly
+        name: Sortie Batterie (OUT)
+        yaxis_id: first
+        type: line
+        color: "#D50000"
+        stroke_width: 3
+        group_by:
+          duration: 1h
+          func: avg
+      - entity: sensor.urban_energie_restituee_au_reseau_hourly
+        name: Bilan energie
+        yaxis_id: second
+        type: line
+        color: blue
+        stroke_width: 1
+        group_by:
+          duration: 1h
+          func: avg
+      yaxis:
+      - id: first
+        decimals: 1
+        apex_config:
+          tickAmount: 4
+      - id: second
+        opposite: true
+        decimals: 1
+        apex_config:
+          tickAmount: 4
+    - type: custom:vertical-stack-in-card
+      cards:
+      - type: entities
+        entities:
+        - entity: sensor.urban_energie_restituee_au_reseau_hourly
+          name: Variation horaire
+        - entity: sensor.urban_batterie_virtuelle_entree_horaire
+          secondary_info: none
+          name: "Batt in pour dashboard energy "
+        - entity: sensor.urban_batterie_virtuelle_sortie_horaire
+          name: Batt out pour dashboard energy
+        title: Index horaire et sensor horaire
+        grid_options:
+          columns: 12
+          rows: 6
+        state_color: true
+      - type: custom:vertical-stack-in-card
+        title: Batterie Virtuelle (kWh)
         cards:
-          - type: custom:apexcharts-card
-            graph_span: 3d
-            span:
-              end: minute
-            header:
-              show: true
-              title: Batterie Virtuelle
-              show_states: true
-              colorize_states: true
-            series:
-              - entity: input_number.batterie_virtuelle_stock
-                yaxis_id: first
-                name: Stock batterie
-                type: line
-                group_by:
-                  duration: 1h
-                  func: last
-                stroke_width: 3
-              - entity: input_number.batterie_virtuelle_pointage
-                yaxis_id: first
-                name: Pointage manuel
-                type: line
-                stroke_width: 3
-                color: '#995000'
-                show:
-                  in_chart: false
-              - entity: sensor.diff_energie_restituee_veille_avant_veille
-                yaxis_id: second
-                name: Variation journalière
-                type: line
-                stroke_width: 3
-                color: '#44cc88'
-                show:
-                  in_chart: false
-            yaxis:
-              - id: first
-                decimals: 0
-                apex_config:
-                  tickAmount: 4
-              - id: second
-                opposite: true
-                decimals: 0
-                apex_config:
-                  tickAmount: 4
-          - type: custom:apexcharts-card
-            graph_span: 4d
-            span:
-              end: minute
-            header:
-              show: true
-              title: Bilan energie réseau
-              show_states: true
-              colorize_states: true
-            apex_config:
-              chart:
-                type: line
-            series:
-              - entity: sensor.energie_restituee_au_reseau
-                name: Index de variation
-                type: line
-                group_by:
-                  duration: 1d
-                  func: avg
-              - entity: sensor.energie_restituee_au_reseau
-                type: line
-                group_by:
-                  duration: 1d
-                  func: diff
-                name: Variation quotidienne
-        column_span: 2
-      - type: grid
-        panel: true
-        cards:
-          - type: entities
-            entities:
-              - entity: sensor.energie_restituee_au_reseau
-              - entity: sensor.diff_energie_restituee_veille_avant_veille
-          - type: custom:vertical-stack-in-card
-            title: Batterie Virtuelle (kWh)
-            cards:
-              - type: custom:numberbox-card
-                entity: input_number.batterie_virtuelle_pointage
-                name: 'Pointage manuel '
-                icon: mdi:target
-                min: 0
-                max: 100
-                step: 0.1
-                unit: kWh
-                style: |
-                  ha-card {
-                    margin-bottom: 8px;
-                  }
-                secondary_info: à date de facture
-              - type: custom:numberbox-card
-                entity: input_number.batterie_virtuelle_stock
-                name: Stock calculé
-                icon: mdi:battery
-                min: -100
-                max: 200
-                step: 0.1
-                unit: kWh
-                border: false
-          - graph: line
-            type: sensor
-            entity: input_number.energie_restituee_veille
-            detail: 1
-          - graph: line
-            type: sensor
-            detail: 1
-            entity: input_number.energie_restituee_avant_veille
-      - type: grid
-        cards:
-          - type: custom:apexcharts-card
-            graph_span: 3day
-            span:
-              end: minute
-            header:
-              show: true
-              title: Batterie Virtuelle - Flux Horaire
-              show_states: true
-              colorize_states: true
-            apex_config:
-              chart:
-                type: area
-              stroke:
-                curve: smooth
-            series:
-              - entity: input_number.energie_battery_in_hourly
-                yaxis_id: first
-                name: Entrée Batterie (IN)
-                type: line
-                color: '#00C853'
-                stroke_width: 3
-                group_by:
-                  duration: 1h
-                  func: min
-              - entity: input_number.energie_battery_out_hourly
-                name: Sortie Batterie (OUT)
-                yaxis_id: first
-                type: line
-                color: '#D50000'
-                stroke_width: 3
-                group_by:
-                  duration: 1h
-                  func: max
-              - entity: sensor.energie_restituee_au_reseau_hourly
-                name: Bilan energie
-                yaxis_id: second
-                type: line
-                color: yellow
-                stroke_width: 1
-                group_by:
-                  duration: 1h
-                  func: avg
-            yaxis:
-              - id: first
-                decimals: 1
-                apex_config:
-                  tickAmount: 4
-              - id: second
-                opposite: true
-                decimals: 1
-                apex_config:
-                  tickAmount: 4
-      - type: grid
-        cards:
-          - type: entities
-            entities:
-              - entity: sensor.energie_restituee_au_reseau_hourly
-                name: Variation horaire
-              - entity: sensor.batterie_virtuelle_entree_horaire
-                secondary_info: none
-                name: 'Batt in pour dashboard energy '
-              - entity: sensor.batterie_virtuelle_sortie_horaire
-                name: Batt out pour dashboard energy
-            title: Index horaire et sensor horaire
-          - type: tile
-            features_position: bottom
-            vertical: false
-            entity: input_number.energie_battery_in_hourly
-          - type: tile
-            features_position: bottom
-            vertical: false
-            entity: input_number.energie_battery_out_hourly
-          - type: custom:numberbox-card
-            border: true
-            entity: input_number.energie_battery_in_hourly
-            step: 0.1
-          - type: custom:numberbox-card
-            border: true
-            entity: input_number.energie_battery_out_hourly
-            step: 0.1
-    cards: []
-    type: sections
-    max_columns: 3
-    dense_section_placement: true
+        - type: custom:numberbox-card
+          entity: input_number.urban_batterie_virtuelle_pointage
+          name: "Pointage manuel "
+          icon: mdi:target
+          min: 0
+          max: 100
+          step: 0.1
+          unit: kWh
+          style: |
+            ha-card {
+              margin-bottom: 8px;
+            }
+          secondary_info: à date de facture
+          border: true
+        - type: custom:numberbox-card
+          entity: input_number.urban_batterie_virtuelle_stock
+          name: Stock calculé
+          icon: mdi:battery
+          min: -100
+          max: 200
+          step: 0.1
+          unit: kWh
+          border: false
+    column_span: 3
+  - type: grid
+    cards:
+    - type: heading
+      heading_style: title
+    column_span: 2
+  cards: []
+  type: sections
+  max_columns: 3
+  dense_section_placement: false
 
 
 ---
-# custom_components/urbansolar_battery/config/input_numbers.yaml
+# custom_components/ha_urbansolar_bv/config/input_numbers.yaml
 ---
 
-  energie_restituee_veille:
-    name: Énergie Restituée Veille
-    min: 0
-    max: 10000
-    step: 1
-    unit_of_measurement: kWh
-    
-  energie_battery_in_hourly:
-    name: energie battery in hourly
-    min: 0
-    max: 10000
-    step: 1
-    unit_of_measurement: kWh    
-    
-  energie_battery_out_hourly:
-    name: energie battery out hourly
-    min: -10000
-    max: 0
-    step: 1
-    unit_of_measurement: kWh  
+urban_energie_battery_in_hourly:
+  name: urban energie battery in hourly
+  min: 0
+  max: 10000
+  step: 0.1
+  initial: 0
+  unit_of_measurement: kWh
 
-  energie_restituee_avant_veille:
-    name: Énergie Restituée Avant-Veille
-    min: 0
-    max: 100000
-    step: 1
-    unit_of_measurement: kWh
-    
-  batterie_virtuelle_pointage:
-    name: Batterie Virtuelle Pointage Manuel
-    min: 0
-    max: 10000
-    step: 1
-    unit_of_measurement: kWh
+urban_energie_battery_out_hourly:
+  name: urban energie battery out hourly
+  max: 0
+  min: -10000
+  step: 0.1
+  initial: 0
+  unit_of_measurement: kWh
 
-  batterie_virtuelle_stock:
-    name: Batterie Virtuelle Stock
-    min: 0
-    max: 10000
-    step: 1
-    unit_of_measurement: kWh
+urban_batterie_virtuelle_pointage:
+  name: Urban Batterie Virtuelle Pointage Manuel
+  min: 0
+  max: 10000
+  step: 0.1
+  mode: box
+  unit_of_measurement: kWh
 
----
-# custom_components/urbansolar_battery/config/sensors.yaml
----
-
-  - platform: template
-    sensors:
-      diff_energie_restituee_veille_avant_veille:
-        friendly_name: "Diff Énergie Restituée Veille - Avant-Veille"
-        unit_of_measurement: "kWh"
-        value_template: >
-          {% set veille = states('input_number.energie_restituee_veille') | float(0) %}
-          {% set avant_veille = states('input_number.energie_restituee_avant_veille') | float(0) %}
-          {{ veille - avant_veille }}
-  
-  - platform: template
-    sensors:
-      batterie_virtuelle_sortie_horaire:
-        friendly_name: "Batterie Virtuelle Sortie Horaire"
-        unit_of_measurement: "kWh"
-        value_template: >
-          {% set val = states('input_number.energie_battery_out_hourly') | float(0) %}
-          {{ -1 * val }}
-  
-  - platform: template
-    sensors:
-      batterie_virtuelle_entre_horaire:
-        friendly_name: "Batterie Virtuelle Entrée Horaire"
-        unit_of_measurement: "kWh"
-        value_template: "{{ states('input_number.energie_battery_in_hourly') | float(0) }}"
+urban_batterie_virtuelle_stock:
+  name: Urban Batterie Virtuelle Stock
+  min: 0
+  max: 10000
+  step: 0.1
+  mode: box
+  unit_of_measurement: kWh
 
 
 ---
-# custom_components/urbansolar_battery/config/utility_meters.yaml
+# custom_components/ha_urbansolar_bv/config/integrations.yaml
 ---
 
-  energie_restituee_au_reseau_hourly:
-    source: sensor.energie_restituee_au_reseau
-    cycle: hourly
-    net_consumption: true
+
 
 ---
-# custom_components/urbansolar_battery/translations/fr.json
+# custom_components/ha_urbansolar_bv/config/sensors.yaml
+---
+
+
+
+---
+# custom_components/ha_urbansolar_bv/config/utility_meters.yaml
+---
+
+urban_energie_restituee_au_reseau_hourly:
+  source: sensor.urban_energie_restituee_au_reseau
+  cycle: hourly
+  net_consumption: true
+
+
+---
+# custom_components/ha_urbansolar_bv/translations/fr.json
 ---
 
 {
@@ -807,14 +1045,23 @@ views:
     "step": {
       "user": {
         "title": "Configurer la Batterie Virtuelle Urban Solar",
-        "description": "Sélectionnez les capteurs de production et consommation."
+        "description": "Veuillez sélectionner des capteurs de puissance en kW.",
+        "data": {
+          "solar_power_sensor": "Capteur de puissance solaire (kW)",
+          "total_power_conso_sensor": "Capteur de puissance consommée (kW)"
+        }
       }
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Options de la Batterie Virtuelle"
+        "title": "Options de la Batterie Virtuelle",
+        "description": "Veuillez sélectionner des capteurs de puissance en kW.",
+        "data": {
+          "solar_power_sensor": "Capteur de puissance solaire (kW)",
+          "total_power_conso_sensor": "Capteur de puissance consommée (kW)"
+        }
       }
     }
   }
@@ -822,4 +1069,4 @@ views:
 
 
 ---
-# Estimation du nombre de tokens : 6118 tokens
+# Estimation du nombre de tokens : 8837 tokens
