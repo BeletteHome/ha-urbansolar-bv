@@ -39,21 +39,25 @@ async def setup_virtual_battery(hass: HomeAssistant, entry: ConfigEntry) -> None
     for src_name, dst_name in FILES_TO_COPY.items():
         src = os.path.join(CONFIG_DIR, src_name)
         dst = os.path.join(TARGET_DIR, dst_name)
-        if os.path.exists(src):
+        if os.path.exists(src) and not os.path.exists(dst):
             await hass.async_add_executor_job(shutil.copy, src, dst)
             _LOGGER.debug("Copied %s → %s", src, dst)
+        elif os.path.exists(dst):
+            _LOGGER.debug("Preserving existing configuration file %s", dst)
         else:
             _LOGGER.warning("Missing source file: %s", src)
 
     # 2) Initialiser ou copier sensors.yaml
-    if os.path.exists(STATIC_SENSORS_SRC):
+    if os.path.exists(STATIC_SENSORS_SRC) and not os.path.exists(DYNAMIC_SENSORS_DST):
         await hass.async_add_executor_job(shutil.copy, STATIC_SENSORS_SRC, DYNAMIC_SENSORS_DST)
-    else:
+    elif not os.path.exists(DYNAMIC_SENSORS_DST):
         def write_empty():
             with open(DYNAMIC_SENSORS_DST, "w", encoding="utf-8") as f:
                 yaml.dump([], f)
         await hass.async_add_executor_job(write_empty)
         _LOGGER.warning("No static sensors.yaml found; created empty urban_sensors.yaml")
+    else:
+        _LOGGER.debug("Preserving existing configuration file %s", DYNAMIC_SENSORS_DST)
 
     # 3) Récupérer les capteurs configurés
     prod_instant = entry.options.get(
@@ -189,8 +193,38 @@ async def setup_virtual_battery(hass: HomeAssistant, entry: ConfigEntry) -> None
                       ]
                     }
 
+        managed_sensor_ids = {
+            sensor["unique_id"] for sensor in new_list["sensor"]
+        }
+        if isinstance(existing, dict):
+            existing_sensors = existing.get("sensor", [])
+            if not isinstance(existing_sensors, list):
+                raise ValueError("The sensor key in urban_sensors.yaml must be a list")
+            existing["sensor"] = [
+                sensor for sensor in existing_sensors
+                if not isinstance(sensor, dict)
+                or sensor.get("unique_id") not in managed_sensor_ids
+            ] + new_list["sensor"]
+            merged_sensors = existing
+        elif isinstance(existing, list):
+            merged_sensors = []
+            for block in existing:
+                if not isinstance(block, dict) or not isinstance(block.get("sensor"), list):
+                    merged_sensors.append(block)
+                    continue
+                remaining_sensors = [
+                    sensor for sensor in block["sensor"]
+                    if not isinstance(sensor, dict)
+                    or sensor.get("unique_id") not in managed_sensor_ids
+                ]
+                if remaining_sensors:
+                    merged_sensors.append({**block, "sensor": remaining_sensors})
+            merged_sensors.append(new_list)
+        else:
+            raise ValueError("urban_sensors.yaml must contain a mapping or list")
+
         with open(DYNAMIC_SENSORS_DST, "w", encoding="utf-8") as f:
-            yaml.dump(new_list, f, allow_unicode=True, sort_keys=False)
+            yaml.dump(merged_sensors, f, allow_unicode=True, sort_keys=False)
 
         _LOGGER.info("Injected 'urban_puissance_import_enedis' sensor")
 
@@ -203,6 +237,7 @@ async def setup_virtual_battery(hass: HomeAssistant, entry: ConfigEntry) -> None
             {
                 "platform": "integration",
                 "name": "urban_energie_solaire_produite",
+                "unique_id": "urban_energie_solaire_produite",
                 "source": prod_instant,
                 "round": 3,
                 "method": "left"
@@ -210,6 +245,7 @@ async def setup_virtual_battery(hass: HomeAssistant, entry: ConfigEntry) -> None
             {
                 "platform": "integration",
                 "name": "urban_energie_consommee_totale",
+                "unique_id": "urban_energie_consommee_totale",
                 "source": cons_instant,
                 "round": 3,
                 "method": "left"
@@ -217,6 +253,7 @@ async def setup_virtual_battery(hass: HomeAssistant, entry: ConfigEntry) -> None
             {
                 "platform": "integration",
                 "name": "urban_energie_importee_enedis_raw",
+                "unique_id": "urban_energie_importee_enedis_raw",
                 "source": "sensor.urban_puissance_import_enedis",
                 "round": 3,
                 "method": "left",
@@ -227,8 +264,29 @@ async def setup_virtual_battery(hass: HomeAssistant, entry: ConfigEntry) -> None
 
         ]
 
+        if os.path.exists(DYNAMIC_INTEGRATION_DST):
+            with open(DYNAMIC_INTEGRATION_DST, "r", encoding="utf-8") as f:
+                existing_integrations = yaml.safe_load(f) or []
+        else:
+            existing_integrations = []
+
+        if not isinstance(existing_integrations, list):
+            raise ValueError("urban_integrations.yaml must contain a list")
+
+        managed_names = {integration["name"] for integration in integrations}
+        existing_integrations = [
+            integration for integration in existing_integrations
+            if not isinstance(integration, dict)
+            or integration.get("name") not in managed_names
+        ]
+
         with open(DYNAMIC_INTEGRATION_DST, "w", encoding="utf-8") as f:
-            yaml.dump(integrations, f, allow_unicode=True, sort_keys=False)
+            yaml.dump(
+                existing_integrations + integrations,
+                f,
+                allow_unicode=True,
+                sort_keys=False,
+            )
 
         _LOGGER.info("Injected integration sensors.")
 
