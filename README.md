@@ -23,7 +23,7 @@
 <a id="ajouter-le-depot-hacs"></a>
 ## 1. Ajouter le dépôt HACS
 
-La version de test publiée actuellement est [Urban Solar Battery 1.0.1](https://github.com/BeletteHome/ha-urbansolar-bv/releases/tag/v1.0.1). Le contrôle HACS du dépôt échoue actuellement sur les métadonnées GitHub : licence absente, fonctionnalité de signalement désactivée et sujets du dépôt manquants. L'installation manuelle de l'archive ZIP reste disponible ci-dessous.
+La version de test publiée actuellement est [Urban Solar Battery 1.0.2](https://github.com/BeletteHome/ha-urbansolar-bv/releases/tag/v1.0.2). Le contrôle HACS du dépôt échoue actuellement sur les métadonnées GitHub : licence absente, fonctionnalité de signalement désactivée et sujets du dépôt manquants. L'installation manuelle de l'archive ZIP reste disponible ci-dessous.
 
 1. Ouvrez **HACS** dans Home Assistant.  
 2. Allez dans l’onglet **Intégrations**.  
@@ -39,15 +39,15 @@ La version de test publiée actuellement est [Urban Solar Battery 1.0.1](https:/
 
 Avant toute installation ou mise à jour, créez une sauvegarde Home Assistant. N'exécutez pas simultanément le dépôt d'origine et ce fork : ils utilisent le même domaine et les mêmes fichiers de configuration. Lors d'un remplacement manuel, conservez l'entrée d'intégration et les fichiers `urban_*.yaml` existants.
 
-### Installation manuelle de la version 1.0.1
+### Installation manuelle de la version 1.0.2
 
-1. Téléchargez l'archive [`urbansolar_bv.zip`](https://github.com/BeletteHome/ha-urbansolar-bv/releases/download/v1.0.1/urbansolar_bv.zip) depuis la page de la publication.
+1. Téléchargez l'archive [`urbansolar_bv.zip`](https://github.com/BeletteHome/ha-urbansolar-bv/releases/download/v1.0.2/urbansolar_bv.zip) depuis la page de la publication.
 2. Si une ancienne version est installée, arrêtez Home Assistant et supprimez ou déplacez uniquement son ancien dossier de code dans `custom_components/`. Ne supprimez ni l'entrée d'intégration dans Home Assistant ni les fichiers `urban_*.yaml`.
 3. Créez le dossier `/config/custom_components/ha_urbansolar_bv/`, puis décompressez-y le contenu de l'archive. Vérifiez que `manifest.json` se trouve directement dans ce dossier, et non dans un sous-dossier supplémentaire.
 4. Redémarrez Home Assistant.
 5. Dans **Paramètres → Appareils et services**, vérifiez l'entrée **UrbanSolar Battery**. Si c'est une nouvelle installation, choisissez **Ajouter une intégration** et sélectionnez les capteurs source à l'étape suivante.
 
-Pour une installation HACS, utilisez le dépôt personnalisé de la section 1, sélectionnez **UrbanSolar Battery 1.0.1**, puis redémarrez Home Assistant. Comme ce dépôt échoue actuellement à certains contrôles HACS, l'installation manuelle est le parcours de test recommandé.
+Pour une installation HACS, utilisez le dépôt personnalisé de la section 1, sélectionnez **UrbanSolar Battery 1.0.2**, puis redémarrez Home Assistant. Comme ce dépôt échoue actuellement à certains contrôles HACS, l'installation manuelle est le parcours de test recommandé.
 
 Les cartes Lovelace ci-dessous ne sont pas nécessaires au fonctionnement de l'intégration. Installez-les uniquement si vous souhaitez utiliser le tableau de bord fourni.
 
@@ -413,7 +413,7 @@ Les entités `sensor.urban_batterie_virtuelle_entree_horaire` et `sensor.urban_b
 
 ### Validation HACS
 
-La validation HACS de ce fork échoue actuellement sur trois métadonnées GitHub : aucun fichier de licence, fonctionnalité de signalement désactivée et aucun sujet reconnu. L'archive ZIP de la [publication 1.0.1](https://github.com/BeletteHome/ha-urbansolar-bv/releases/tag/v1.0.1) reste disponible pour une installation manuelle. N'ajoutez pas de licence avant d'avoir choisi celle qui s'applique à ce fork.
+La validation HACS de ce fork échoue actuellement sur trois métadonnées GitHub : aucun fichier de licence, fonctionnalité de signalement désactivée et aucun sujet reconnu. L'archive ZIP de la [publication 1.0.2](https://github.com/BeletteHome/ha-urbansolar-bv/releases/tag/v1.0.2) reste disponible pour une installation manuelle. N'ajoutez pas de licence avant d'avoir choisi celle qui s'applique à ce fork.
 
 ---
 
