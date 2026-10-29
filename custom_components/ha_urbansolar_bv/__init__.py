@@ -22,6 +22,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     _LOGGER.info("Setting up UrbanSolar Virtual Battery integration")
     
     hass.data.setdefault(DOMAIN, {})
+    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
     # Appelle la fonction pour créer les entités virtuelles
     await setup_virtual_battery(hass, entry)
@@ -36,3 +37,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
     hass.data.pop(DOMAIN, None)
 
     return True
+
+
+async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload the integration after its options change."""
+    await hass.config_entries.async_reload(entry.entry_id)

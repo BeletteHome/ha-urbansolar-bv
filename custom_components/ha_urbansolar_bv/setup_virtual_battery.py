@@ -56,8 +56,12 @@ async def setup_virtual_battery(hass: HomeAssistant, entry: ConfigEntry) -> None
         _LOGGER.warning("No static sensors.yaml found; created empty urban_sensors.yaml")
 
     # 3) Récupérer les capteurs configurés
-    prod_instant = entry.data.get(CONF_SOLAR_POWER_SENSOR)
-    cons_instant = entry.data.get(CONF_TOTAL_POWER_CONSO_SENSOR)
+    prod_instant = entry.options.get(
+        CONF_SOLAR_POWER_SENSOR, entry.data.get(CONF_SOLAR_POWER_SENSOR)
+    )
+    cons_instant = entry.options.get(
+        CONF_TOTAL_POWER_CONSO_SENSOR, entry.data.get(CONF_TOTAL_POWER_CONSO_SENSOR)
+    )
 
     if not prod_instant or not cons_instant:
         _LOGGER.error("Un ou plusieurs capteurs requis sont manquants dans la configuration.")

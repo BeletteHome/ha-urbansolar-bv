@@ -11,6 +11,18 @@ from .const import (
 )
 
 
+def _validate_power_sensors(hass, user_input):
+    errors = {}
+    for input_key in (CONF_SOLAR_POWER_SENSOR, CONF_TOTAL_POWER_CONSO_SENSOR):
+        state = hass.states.get(user_input[input_key])
+        if (
+            state is None
+            or state.attributes.get("unit_of_measurement") != UnitOfPower.KILO_WATT
+        ):
+            errors[input_key] = "invalid_unit"
+    return errors
+
+
 class VirtualBatteryConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Config flow for UrbanSolar Virtual Battery."""
     VERSION = 1
@@ -20,16 +32,7 @@ class VirtualBatteryConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
 
         if user_input is not None:
-            power = user_input[CONF_SOLAR_POWER_SENSOR]
-            powercons = user_input[CONF_TOTAL_POWER_CONSO_SENSOR]
-
-            power_state = self.hass.states.get(power)
-            powercons_state = self.hass.states.get(powercons)
-
-            if not power_state or power_state.attributes.get("unit_of_measurement") != UnitOfPower.KILO_WATT:
-                errors[CONF_SOLAR_POWER_SENSOR] = "invalid_unit"
-            if not powercons_state or powercons_state.attributes.get("unit_of_measurement") != UnitOfPower.KILO_WATT:
-                errors[CONF_TOTAL_POWER_CONSO_SENSOR] = "invalid_unit"
+            errors = _validate_power_sensors(self.hass, user_input)
 
             self._log("Validation errors:", errors)
 
@@ -66,7 +69,8 @@ class VirtualBatteryConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 }),
                 vol.Required(CONF_TOTAL_POWER_CONSO_SENSOR): selector({
                     "entity": {
-                        "domain": "sensor"
+                        "domain": "sensor",
+                        "device_class": "power"
                     }
                 }),
             }),
@@ -92,11 +96,15 @@ class VirtualBatteryOptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input=None):
         """Handle the options form."""
-        if user_input is not None:
-            self._log("Options flow user input:", user_input)
-            return self.async_create_entry(title="", data=user_input)
+        errors = {}
+        current_config = {**self.config_entry.data, **self.config_entry.options}
 
-        current_config = self.config_entry.data
+        if user_input is not None:
+            errors = _validate_power_sensors(self.hass, user_input)
+            if not errors:
+                self._log("Options flow user input:", user_input)
+                return self.async_create_entry(title="", data=user_input)
+
         self._log("Current config:", current_config)
 
         return self.async_show_form(
@@ -120,7 +128,8 @@ class VirtualBatteryOptionsFlowHandler(config_entries.OptionsFlow):
                         "device_class": "power"
                     }
                 }),
-            })
+            }),
+            errors=errors
         )
 
     def _log(self, message, *args):
