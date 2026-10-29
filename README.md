@@ -23,21 +23,31 @@
 <a id="ajouter-le-depot-hacs"></a>
 ## 1. Ajouter le dépôt HACS
 
+La release de test actuelle est [Urban Solar Battery 1.0.1](https://github.com/BeletteHome/ha-urbansolar-bv/releases/tag/v1.0.1). Le contrôle HACS du dépôt échoue actuellement sur les métadonnées GitHub (licence absente, Issues désactivées et sujets/topics manquants). L'installation manuelle du ZIP reste disponible ci-dessous.
+
 1. Ouvrez **HACS** dans Home Assistant.  
 2. Allez dans l’onglet **Intégrations**.  
 3. Cliquez sur **➕ Ajouter un dépôt personnalisé** et entrez l’URL :  
   `https://github.com/BeletteHome/ha-urbansolar-bv`
 4. Sélectionnez **Catégorie : Intégration**.  
-5. Cliquez sur **Enregistrer**
+5. Cliquez sur **Enregistrer**.
 
 ---
 
 <a id="installer-lintegration"></a>
 ## 2. Installer l'intégration
 
-1. Dans **HACS → Intégrations**, recherchez **UrbanSolar Battery**.  
-2. Cliquez sur **Télécharger**.  
-3. **Redémarrez Home Assistant**.
+Avant le remplacement d'une ancienne installation, créez une sauvegarde Home Assistant. N'exécutez pas simultanément le dépôt d'origine et ce fork : ils utilisent le même domaine et les mêmes fichiers de configuration. Remplacez l'ancien code de l'intégration en conservant l'entrée d'intégration et les fichiers `urban_*.yaml` existants.
+
+### Installation manuelle de la release 1.0.1
+
+1. Téléchargez [`urbansolar_bv.zip`](https://github.com/BeletteHome/ha-urbansolar-bv/releases/download/v1.0.1/urbansolar_bv.zip).
+2. Décompressez son contenu dans `/config/custom_components/ha_urbansolar_bv/`. Le fichier `manifest.json` doit se trouver directement dans ce dossier.
+3. Redémarrez Home Assistant, puis ajoutez **UrbanSolar Battery** dans **Paramètres → Appareils et services → Ajouter une intégration** si l'entrée n'existe pas déjà.
+
+Pour une installation HACS, utilisez le dépôt personnalisé de la section 1, sélectionnez **Urban Solar Battery 1.0.1**, puis redémarrez Home Assistant. Comme le dépôt ne passe pas encore tous les contrôles HACS, l'installation manuelle est le chemin de test le plus prévisible.
+
+Les cartes Lovelace ci-dessous ne sont pas nécessaires au fonctionnement de l'intégration. Installez-les uniquement si vous souhaitez utiliser le tableau de bord fourni.
 
 ### 📦 Dépendances Lovelace requises
 
@@ -63,41 +73,48 @@ Lors de l’ajout de l’intégration, une boîte de dialogue vous demandera de 
 1. **Capteur de puissance totale consommée** (ex : `sensor.puissance_totale_consommee`)  
 2. **Capteur de puissance solaire produite** (ex : `sensor.pv_energie_solaire`)
 
-> ⚠️ Assurez-vous que ces capteurs renvoient une puissance en **kW**.
+> **Important :** les deux entités doivent être des capteurs de puissance (`device_class: power`) dont l'unité est exactement `kW`. Les valeurs sont converties en watts par l'intégration. Les capteurs configurés uniquement en `W` ne passent pas la validation actuelle.
 
-Si la boîte de dialogue ne s’affiche pas :  
-→ **Paramètres → Intégrations → ➕ Ajouter** → **Urban Solar Battery**.
+Si la boîte de dialogue ne s’affiche pas : **Paramètres → Appareils et services → Ajouter une intégration → UrbanSolar Battery**.
 
-Ensuite, ajoutez dans votre `configuration.yaml` :
+Après la première configuration de l'intégration, celle-ci copie ses fichiers YAML dans `/config`. Ajoutez les inclusions nécessaires à votre `configuration.yaml` (ne dupliquez pas une clé de premier niveau déjà présente) :
 
 ```yaml
-#Urban solar
+# Urban Solar Battery
 input_number: !include urban_input_numbers.yaml
 sensor: !include urban_integrations.yaml
 template: !include urban_sensors.yaml
 utility_meter: !include urban_utility_meters.yaml
+```
+
+Pour les automations, Home Assistant n'accepte qu'une seule clé `automation:` de premier niveau. Si vous n'avez pas déjà d'inclusion d'automations, vous pouvez ajouter :
+
+```yaml
 automation: !include urban_automations.yaml
 ```
 
-Home Assistant accepts only one top-level `automation:` key. If you already include
-your own automation file, do not add a second `automation:` entry. To load multiple
-YAML automation files, move the YAML automations into separate files under an
-`automations/` directory and use:
+Si votre configuration utilise déjà `automation:`, ne créez pas une deuxième clé. Pour charger plusieurs listes YAML, placez vos fichiers d'automations, ainsi que le contenu de `urban_automations.yaml`, dans un dossier `automations/`, puis utilisez une seule déclaration :
 
 ```yaml
 automation: !include_dir_merge_list automations/
 ```
 
-Place the UrbanSolar automations from `urban_automations.yaml` in that directory
-alongside your own YAML automation files. UI-managed automations are stored
-separately by Home Assistant and do not need to be moved.
----
+Les automations gérées par l'interface Home Assistant sont stockées séparément. Après modification de `configuration.yaml`, vérifiez la configuration et redémarrez Home Assistant.
 
-→**Redémarrez Home Assistant après avoir enregistré configuration.yaml**
+L'intégration copie `urban_dashboard.yaml` dans `/config`, mais ne crée ni n'enregistre automatiquement un tableau de bord Home Assistant. Pour enregistrer ce fichier comme tableau de bord de la barre latérale, ajoutez cette entrée au bloc `lovelace:` existant de `configuration.yaml` :
 
-Enfin créer un dashboard/Tableau de bord
-Nommez le Urban Solar Dashboard
-et dans sa section yaml coller le code suivant
+```yaml
+lovelace:
+  dashboards:
+    urban-solar:
+      mode: yaml
+      title: Urban Solar
+      icon: mdi:solar-power
+      show_in_sidebar: true
+      filename: urban_dashboard.yaml
+```
+
+Redémarrez ensuite Home Assistant. Le contenu complet du fichier `urban_dashboard.yaml` est fourni ci-dessous. Les cartes frontend indiquées dans la section précédente doivent être installées séparément.
 
 ```yaml
 views:
@@ -335,40 +352,47 @@ views:
 
 ### Capteurs créés automatiquement
 
-| Entité | Description |
-|--------|-------------|
-| `sensor.urban_energie_restituee_au_reseau` | Énergie solaire excédentaire envoyée au réseau |
-| `sensor.urban_puissance_import_enedis` | Puissance importée du réseau en temps réel |
-| `sensor.urban_energie_importee_enedis` | Intégration de la puissance importée |
-| `sensor.urban_puissance_solaire_instant` | Puissance solaire instantanée |
-| `sensor.urban_conso_totale_instant` | Puissance totale consommée |
-| `sensor.urban_batterie_virtuelle_stock` | Stock actuel de la batterie virtuelle |
-| `sensor.urban_batterie_virtuelle_entree_horaire` | Entrée horaire vers batterie virtuelle |
-| `sensor.urban_batterie_virtuelle_sortie_horaire` | Sortie horaire depuis la batterie virtuelle |
+| Entité | Rôle |
+|--------|------|
+| `sensor.urban_puissance_import_enedis` | Puissance importée du réseau, en W |
+| `sensor.urban_puissance_batterie_virtuelle_in` | Puissance dirigée vers la batterie virtuelle, en W |
+| `sensor.urban_puissance_batterie_virtuelle_out` | Puissance fournie par la batterie virtuelle, en W |
+| `sensor.urban_puissance_solaire_instant` | Puissance solaire instantanée, en W |
+| `sensor.urban_conso_totale_instant` | Puissance totale consommée, en W |
+| `sensor.urban_energie_solaire_produite` | Énergie solaire calculée par intégration de la puissance |
+| `sensor.urban_energie_consommee_totale` | Énergie consommée calculée par intégration de la puissance |
+| `sensor.urban_energie_importee_enedis_raw` | Énergie importée calculée à partir de la puissance réseau |
+| `sensor.urban_energie_importee_enedis` | Compteur d'énergie importée, en kWh |
+| `sensor.urban_energie_restituee_au_reseau` | Bilan net production moins consommation, en kWh; peut augmenter ou diminuer |
+| `sensor.urban_energie_restituee_au_reseau_hourly` | Compteur net fourni par le helper `utility_meter`, remis à zéro à chaque cycle horaire |
+| `sensor.urban_batterie_virtuelle_entree_horaire` | Compteur d'énergie cumulée vers la batterie, en kWh |
+| `sensor.urban_batterie_virtuelle_sortie_horaire` | Compteur d'énergie cumulée depuis la batterie, en kWh |
+| `sensor.urban_batterie_virtuelle_stock_statistiques` | Copie du stock de batterie destinée aux statistiques long terme |
 
-### Input Numbers
+Les capteurs instantanés de puissance et le capteur de stock ont des statistiques de mesure. Les capteurs d'énergie utilisent des statistiques de total. Les statistiques long terme commencent à s'accumuler après l'installation; elles ne restaurent pas les états historiques déjà purgés.
 
+### Helpers `input_number`
+
+- `input_number.urban_energie_battery_in_hourly`
+- `input_number.urban_energie_battery_out_hourly`
 - `input_number.urban_batterie_virtuelle_stock`
-- `input_number.urban_energie_restituee_veille`
+- `input_number.urban_batterie_virtuelle_pointage`
+
+Les helpers `urban_energie_battery_*_hourly` sont des compteurs cumulés mis à jour par l'automation horaire; ils ne représentent pas une valeur isolée remise à zéro chaque heure. Le helper `input_number.urban_batterie_virtuelle_stock` contient le stock courant. Le capteur `sensor.urban_batterie_virtuelle_stock_statistiques` en fournit une copie compatible avec les statistiques long terme.
 
 ### Automatisations incluses
 
-- Mise à jour quotidienne du stock de la batterie
-- Calcul différentiel sur l’énergie exportée
-- Mise à jour manuelle possible via Number Box
+- Mise à jour horaire du stock et des compteurs de batterie, à 59:45 de chaque heure.
+- Le pointage manuel est appliqué puis remis à zéro par cette automation.
 
 ---
 
 <a id="dashboard-lovelace"></a>
 ## 5. Dashboard Lovelace
 
-Un **dashboard complet** est installé automatiquement via `urban_dashboard.yaml` :  
-- Visualisation du flux d’énergie  
-- Courbes de production et de consommation  
-- Suivi du stock de la batterie virtuelle
-- 2 capteurs ad'hoc disponibles pour configurer le dashboard **Energy** pour la partie batterie :
-    `sensor.urban_batterie_virtuelle_entree_horaire`
-    `sensor.urban_batterie_virtuelle_sortie_horaire`, pensez aussi a supprimer l'énergie retournée au réseau car l'énergie retourrne a la batterie ^^
+Le tableau de bord montre les flux de puissance, le bilan énergétique et le stock de la batterie virtuelle. Il référence les cartes frontend listées dans la section d'installation.
+
+Les entités `sensor.urban_batterie_virtuelle_entree_horaire` et `sensor.urban_batterie_virtuelle_sortie_horaire` peuvent servir à configurer les flux d'entrée et de sortie de batterie dans le tableau de bord Énergie. Vérifiez le sens et l'unité des compteurs avant de les sélectionner.
 
 ![Capture d'écran de l'application](https://i.imgur.com/NBjRcze.png)
 
@@ -380,11 +404,14 @@ Un **dashboard complet** est installé automatiquement via `urban_dashboard.yaml
 <a id="depannage"></a>
 ## 6. Dépannage
 
-- **Capteur manquant (`sensor.urban_energie_restituee_au_reseau`) ?**  
-  → Vérifiez votre configuration YAML et les logs de Home Assistant.
+- **Le formulaire refuse un capteur source ?** Vérifiez qu'il a `device_class: power` et l'unité exacte `kW`; les capteurs en `W` ne passent pas la validation actuelle.
+- **Des entités UrbanSolar manquent ?** Vérifiez que l'intégration a été configurée, que les sources sélectionnées sont disponibles et que les inclusions `urban_*.yaml` sont présentes dans `configuration.yaml`. Validez la configuration et consultez les journaux Home Assistant.
+- **Le stock de batterie ne se met pas à jour ?** L'automation s'exécute à `:59:45` de chaque heure. Elle ignore le cycle si `sensor.urban_energie_restituee_au_reseau_hourly` n'est pas strictement compris entre `-30` et `30` kWh.
+- **Les statistiques long terme n'apparaissent pas immédiatement ?** Vérifiez que l'entité a un état numérique et un `state_class`. Les statistiques commencent après l'installation; elles ne recréent pas les états historiques déjà purgés.
 
-- **Pas de mise à jour nocturne ?**  
-  → Assurez-vous que votre timezone est correcte.  
+### Validation HACS
+
+La validation HACS de ce fork échoue actuellement sur trois métadonnées GitHub : aucun fichier de licence, Issues désactivées et aucun topic reconnu. Le ZIP de la [release 1.0.1](https://github.com/BeletteHome/ha-urbansolar-bv/releases/tag/v1.0.1) reste disponible pour test manuel. N'ajoutez pas de licence avant d'avoir choisi celle qui s'applique à ce fork.
 
 ---
 
