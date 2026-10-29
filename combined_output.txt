@@ -348,15 +348,15 @@ CONF_TOTAL_POWER_CONSO_SENSOR = "total_power_conso_sensor"
   "domain": "ha_urbansolar_bv",
   "name": "UrbanSolar Battery",
   "after_dependencies": [],
-  "codeowners": ["@chourmovs"],
+  "codeowners": ["@BeletteHome"],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/chourmovs/ha-urbansolar-bv/wiki",
+  "documentation": "https://github.com/BeletteHome/ha-urbansolar-bv#readme",
   "integration_type": "service",
   "iot_class": "local_push",
-  "issue_tracker": "https://github.com/chourmovs/ha-urbansolar-bv/issues",
+  "issue_tracker": "https://github.com/BeletteHome/ha-urbansolar-bv/issues",
   "requirements": [],
-  "version": "1.0"
+  "version": "1.0.1"
 }
 
 
@@ -1069,4 +1069,4 @@ urban_energie_restituee_au_reseau_hourly:
 
 
 ---
-# Estimation du nombre de tokens : 8837 tokens
+# Estimation du nombre de tokens : 8840 tokens
